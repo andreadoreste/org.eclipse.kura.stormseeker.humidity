@@ -1,5 +1,7 @@
 package org.eclipse.kura.stormseeker.humidity;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.Date;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -27,13 +29,16 @@ public class HumidityChecker implements ConfigurableComponent, CloudConnectionLi
 
 		private Map<String, Object> properties;
 
-		private float humidity;
+		private float humidity = 0;
 
 		private CloudPublisher cloudPublisher;
 
 		private final ScheduledExecutorService worker;
 
 		private ScheduledFuture<?> handle;
+		
+		private String line;
+		private String[] data;
 
 		//Constructor
 		public HumidityChecker() {
@@ -125,10 +130,10 @@ public class HumidityChecker implements ConfigurableComponent, CloudConnectionLi
 			}
 
 			//reset the Humidity to the initial value
-			if (!onUpdate) {
+			//if (!onUpdate) {
 				//verify if there is a need for change
-				this.humidity = 0;
-			}
+			//	this.humidity = 10000;
+			//}
 
 			//change
 			int pubrate =5;
@@ -137,18 +142,24 @@ public class HumidityChecker implements ConfigurableComponent, CloudConnectionLi
 				@Override
 				public void run() {
 					Thread.currentThread().setName(getClass().getSimpleName());
-					doPublish();
+					try {
+						doPublish();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 				}
 			}, 0, pubrate, TimeUnit.SECONDS);
 		}
 
 
-		private void doPublish() {
+		private void doPublish() throws Exception {
 
 			//default value for Humidity
 			//insert method to check Humidity
-			this.humidity = 10;
-
+			//this.humidity = 10;
+			this.humidity = getHumidity();
+			
 			if (this.cloudPublisher ==null) {
 				//if(nonNull(this.cloudPublisher)) {
 				s_logger.info("No cloud publisher selected. Temp Cannot publish!");
@@ -159,7 +170,9 @@ public class HumidityChecker implements ConfigurableComponent, CloudConnectionLi
 			KuraPayload payload = new KuraPayload();
 
 			payload.setTimestamp(new Date());
-			payload.addMetric("Humidity", this.humidity);
+			payload.addMetric("type", "humidity");
+			payload.addMetric("value", this.humidity);
+			payload.addMetric("measurement", "%");
 
 			//Create Kura Message
 			KuraMessage message = new KuraMessage(payload);
@@ -172,5 +185,19 @@ public class HumidityChecker implements ConfigurableComponent, CloudConnectionLi
 				s_logger.error("Cannot publish message: {}", message, e);
 			}
 
+		}
+		public float getHumidity() throws Exception{
+			float hum = 10000;
+			Runtime rt = Runtime.getRuntime();
+			Process p = rt.exec("python /home/pi/teste_python_sensor.py");
+			BufferedReader bri = new BufferedReader(new InputStreamReader(p.getInputStream()));
+			///System.out.println(line);
+			if ((line = bri.readLine())!= null) {
+				data = line.split(";");
+				//System.out.println(data);
+				hum = Float.parseFloat(data[1]);
+				
+			}
+			return hum;
 		}
 }
